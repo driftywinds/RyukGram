@@ -112,11 +112,33 @@ static void sciSetPlayViewOpacity(id cell, CGFloat opacity) {
     }
 }
 
+// Force unmute by calling _didTapSoundButton on the section controller
+static void sciForceUnmuteCell(id videoCell) {
+    if (!videoCell) return;
+    Ivar delegateIvar = class_getInstanceVariable([videoCell class], "_delegate");
+    if (!delegateIvar) return;
+    id sectionCtrl = object_getIvar(videoCell, delegateIvar);
+    if (!sectionCtrl) return;
+    SEL isAudioSel = NSSelectorFromString(@"isAudioEnabled");
+    if (![sectionCtrl respondsToSelector:isAudioSel]) return;
+    BOOL audioOn = ((BOOL(*)(id,SEL))objc_msgSend)(sectionCtrl, isAudioSel);
+    if (audioOn) return;
+    SEL tapSel = NSSelectorFromString(@"_didTapSoundButton");
+    if ([sectionCtrl respondsToSelector:tapSel]) {
+        ((void(*)(id,SEL))objc_msgSend)(sectionCtrl, tapSel);
+    }
+}
+
 %hook IGSundialViewerVideoCell
 // Video playing/unpausing — use hidden (IG sets hidden=NO on next pause)
 - (void)sundialVideoPlaybackViewDidStartPlaying:(id)view {
     %orig;
-    if (sciIsPausePlayMode()) sciHidePlayView(self);
+    if (sciIsPausePlayMode()) {
+        sciHidePlayView(self);
+        // Force unmute if in reels tab — this fires when the video ACTUALLY starts
+        // playing, guaranteed to have a ready section controller
+        if (sciIsInReelsTab) sciForceUnmuteCell(self);
+    }
 }
 
 - (void)videoViewDidUnpause:(id)view {
@@ -199,24 +221,6 @@ static void new_playbackToggle_layoutSubviews(id self, SEL _cmd) {
 }
 
 // ============ FORCE AUDIO IN REELS TAB ============
-// Uses _didTapSoundButton on the section controller — the same code path
-// as physically tapping the sound button.
-
-static void sciForceUnmuteCell(id videoCell) {
-    if (!videoCell) return;
-    Ivar delegateIvar = class_getInstanceVariable([videoCell class], "_delegate");
-    if (!delegateIvar) return;
-    id sectionCtrl = object_getIvar(videoCell, delegateIvar);
-    if (!sectionCtrl) return;
-    SEL isAudioSel = NSSelectorFromString(@"isAudioEnabled");
-    if (![sectionCtrl respondsToSelector:isAudioSel]) return;
-    BOOL audioOn = ((BOOL(*)(id,SEL))objc_msgSend)(sectionCtrl, isAudioSel);
-    if (audioOn) return;
-    SEL tapSel = NSSelectorFromString(@"_didTapSoundButton");
-    if ([sectionCtrl respondsToSelector:tapSel]) {
-        ((void(*)(id,SEL))objc_msgSend)(sectionCtrl, tapSel);
-    }
-}
 
 %hook IGSundialFeedViewController
 - (void)viewDidAppear:(BOOL)animated {
