@@ -15,6 +15,7 @@ static BOOL sciIsPausePlayMode() {
 }
 
 static BOOL sciIsInReelsTab = NO;
+static BOOL sciIsZooming = NO;
 
 // ============ FIND PLAYBACK VIEW ============
 // Handles two IG A/B test variants:
@@ -65,6 +66,8 @@ static UIView * _Nullable sciFindPlaybackView(UIView *videoCell) {
     while (videoCell && ![NSStringFromClass([videoCell class]) containsString:@"VideoCell"])
         videoCell = videoCell.superview;
     UIView *playView = sciFindPlaybackView(videoCell);
+    // Skip during zoom — zoom callbacks handle the play button directly
+    if (sciIsZooming) return;
     if (playView) playView.layer.opacity = opacity;
 }
 @end
@@ -85,34 +88,59 @@ static void sciSetupKVO(UIView *ufi) {
     [sciObservedLayers addObject:dlBtn.layer];
 }
 
-// ============ HIDE PLAY INDICATOR WHEN VIDEO PLAYS ============
-// After hold/zoom clear mode, IG resumes but leaves the play indicator visible.
-// We hide it when the video actually starts playing or unpauses.
+// ============ HIDE PLAY INDICATOR ON PLAY + ZOOM ============
+
+// Use hidden for play/unpause (IG controls unhiding on next pause).
+// Use layer.opacity for zoom/KVO (we control restore).
+static void sciHidePlayView(id cell) {
+    UIView *playView = sciFindPlaybackView(cell);
+    if (playView) playView.hidden = YES;
+    Ivar ivar = class_getInstanceVariable([cell class], "_playPauseMediaIndicator");
+    if (ivar) {
+        UIView *indicator = object_getIvar(cell, ivar);
+        if (indicator) indicator.hidden = YES;
+    }
+}
+
+static void sciSetPlayViewOpacity(id cell, CGFloat opacity) {
+    UIView *playView = sciFindPlaybackView(cell);
+    if (playView) playView.layer.opacity = opacity;
+    Ivar ivar = class_getInstanceVariable([cell class], "_playPauseMediaIndicator");
+    if (ivar) {
+        UIView *indicator = object_getIvar(cell, ivar);
+        if (indicator) indicator.layer.opacity = opacity;
+    }
+}
 
 %hook IGSundialViewerVideoCell
+// Video playing/unpausing — use hidden (IG sets hidden=NO on next pause)
 - (void)sundialVideoPlaybackViewDidStartPlaying:(id)view {
     %orig;
-    if (sciIsPausePlayMode()) {
-        Ivar ivar = class_getInstanceVariable([self class], "_playPauseMediaIndicator");
-        if (ivar) {
-            UIView *indicator = object_getIvar(self, ivar);
-            if (indicator) indicator.hidden = YES;
-        }
-        UIView *playView = sciFindPlaybackView(self);
-        if (playView) playView.hidden = YES;
-    }
+    if (sciIsPausePlayMode()) sciHidePlayView(self);
 }
 
 - (void)videoViewDidUnpause:(id)view {
     %orig;
+    if (sciIsPausePlayMode()) sciHidePlayView(self);
+}
+
+// Zoom — use layer.opacity (we restore it ourselves on zoom end)
+- (void)sundialVideoPlaybackView:(id)pbView willBeginZoomInteractionForView:(id)view withLogging:(id)logging {
+    %orig;
+    sciIsZooming = YES;
+    if (sciIsPausePlayMode()) sciSetPlayViewOpacity(self, 0);
+}
+
+- (void)sundialVideoPlaybackView:(id)pbView didEndZoomInteractionForView:(id)view withLogging:(id)logging minScale:(CGFloat)minScale {
+    %orig;
+    sciIsZooming = NO;
     if (sciIsPausePlayMode()) {
-        Ivar ivar = class_getInstanceVariable([self class], "_playPauseMediaIndicator");
-        if (ivar) {
-            UIView *indicator = object_getIvar(self, ivar);
-            if (indicator) indicator.hidden = YES;
-        }
-        UIView *playView = sciFindPlaybackView(self);
-        if (playView) playView.hidden = YES;
+        sciSetPlayViewOpacity(self, 1);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            BOOL playing = [self respondsToSelector:@selector(isPlaying)] ?
+                ((BOOL(*)(id,SEL))objc_msgSend)(self, @selector(isPlaying)) : NO;
+            if (playing) sciHidePlayView(self);
+        });
     }
 }
 %end
