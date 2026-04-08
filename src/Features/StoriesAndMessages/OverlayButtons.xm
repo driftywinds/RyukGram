@@ -2,6 +2,7 @@
 #import "StoryHelpers.h"
 
 extern "C" BOOL sciSeenBypassActive;
+extern "C" BOOL sciAdvanceBypassActive;
 extern "C" NSMutableSet *sciAllowedSeenPKs;
 extern "C" void sciAllowSeenForPK(id);
 
@@ -232,6 +233,34 @@ static void sciDownloadDMVisualMessage(UIViewController *dmVC) {
             }
             sciSeenBypassActive = NO;
             [SCIUtils showToastForDuration:2.0 title:@"Marked as seen" subtitle:@"Will sync when leaving stories"];
+
+            // Advance to next story item if enabled — bypass the stop-auto-advance hook
+            if ([SCIUtils getBoolPref:@"advance_on_mark_seen"] && sectionCtrl) {
+                __block id secCtrl = sectionCtrl;
+                __weak __typeof(self) weakSelf = self;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    sciAdvanceBypassActive = YES;
+
+                    SEL advSel = NSSelectorFromString(@"advanceToNextItemWithNavigationAction:");
+                    if ([secCtrl respondsToSelector:advSel]) {
+                        ((void(*)(id, SEL, NSInteger))objc_msgSend)(secCtrl, advSel, 1);
+                    }
+
+                    // After advancing, kick playback on the new section controller
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        __strong __typeof(weakSelf) strongSelf = weakSelf;
+                        UIViewController *vc2 = strongSelf ? sciFindVC(strongSelf, @"IGStoryViewerViewController") : nil;
+                        id sc2 = vc2 ? sciFindSectionController(vc2) : nil;
+                        if (sc2) {
+                            SEL resumeSel = NSSelectorFromString(@"tryResumePlaybackWithReason:");
+                            if ([sc2 respondsToSelector:resumeSel]) {
+                                ((void(*)(id, SEL, NSInteger))objc_msgSend)(sc2, resumeSel, 0);
+                            }
+                        }
+                        sciAdvanceBypassActive = NO;
+                    });
+                });
+            }
             return;
         }
 

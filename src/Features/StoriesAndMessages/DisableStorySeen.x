@@ -5,6 +5,7 @@
 #import <substrate.h>
 
 BOOL sciSeenBypassActive = NO;
+BOOL sciAdvanceBypassActive = NO;
 NSMutableSet *sciAllowedSeenPKs = nil;
 
 void sciAllowSeenForPK(id media) {
@@ -61,11 +62,11 @@ static BOOL sciShouldBlockSeenVisual() {
 - (void)sendSeenRequestForCurrentItem { if (sciShouldBlockSeenVisual()) return; %orig; }
 - (void)markCurrentItemAsSeen { if (sciShouldBlockSeenVisual()) return; %orig; }
 - (void)storyPlayerMediaViewDidPlayToEnd:(id)arg1 {
-    if ([SCIUtils getBoolPref:@"stop_story_auto_advance"]) return;
+    if (!sciAdvanceBypassActive && [SCIUtils getBoolPref:@"stop_story_auto_advance"]) return;
     %orig;
 }
 - (void)advanceToNextReelForAutoScroll {
-    if ([SCIUtils getBoolPref:@"stop_story_auto_advance"]) return;
+    if (!sciAdvanceBypassActive && [SCIUtils getBoolPref:@"stop_story_auto_advance"]) return;
     %orig;
 }
 %end

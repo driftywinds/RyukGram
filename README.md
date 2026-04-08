@@ -87,6 +87,7 @@ A feature-rich iOS tweak for Instagram, forked from [SCInsta](https://github.com
 - Auto mark seen on send (marks messages as read when you send any message) **\***
 - Auto mark seen on typing (marks messages as read the moment you start typing, even when typing status is hidden) **\***
 - Mark seen on story like **\***
+- Advance to next story when marking as seen — tapping the eye button auto-skips to the next story **\***
 - Send audio as file — send audio files as voice messages from the DM plus menu **\***
 - Download voice messages — adds a Download option to the long-press menu on voice messages, saves as M4A via share sheet **\***
 - Disable typing status
