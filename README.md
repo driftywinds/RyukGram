@@ -22,6 +22,8 @@ A feature-rich iOS tweak for Instagram, forked from [SCInsta](https://github.com
 - Hide ads
 - Hide Meta AI
 - Copy description
+- Copy comment text from long-press menu **\***
+- Download GIF comments **\***
 - Profile copy button **\***
 - Do not save recent searches
 - Use detailed (native) color picker

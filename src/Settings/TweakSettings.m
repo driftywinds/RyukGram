@@ -47,6 +47,13 @@
                                             ]
                                         },
                                         @{
+                                            @"header": @"Comments",
+                                            @"rows": @[
+                                                [SCISetting switchCellWithTitle:@"Copy comment text" subtitle:@"Adds a copy option to the comment long-press menu" defaultsKey:@"copy_comment"],
+                                                [SCISetting switchCellWithTitle:@"Download GIF comments" subtitle:@"Adds a download option for GIF comments" defaultsKey:@"download_gif_comment"],
+                                            ]
+                                        },
+                                        @{
                                             @"header": @"Notes",
                                             @"rows": @[
                                                 [SCISetting switchCellWithTitle:@"Hide notes tray" subtitle:@"Hides the notes tray in the dm inbox" defaultsKey:@"hide_notes_tray"],

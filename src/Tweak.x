@@ -67,7 +67,9 @@ BOOL dmVisualMsgsViewedButtonEnabled = false;
         @"story_excluded_show_unexclude_eye": @(YES),
         @"story_seen_mode": @"button",
         @"story_audio_toggle": @(NO),
-        @"settings_pause_playback": @(YES)
+        @"settings_pause_playback": @(YES),
+        @"copy_comment": @(YES),
+        @"download_gif_comment": @(YES)
     };
     [[NSUserDefaults standardUserDefaults] registerDefaults:sciDefaults];
     

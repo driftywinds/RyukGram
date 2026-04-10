@@ -187,9 +187,14 @@
         if (error && error.code != NSURLErrorCancelled) {
             NSLog(@"[SCInsta] Download: Download failed with error: \"%@\"", error);
             [self.pill setText:@"Download failed"];
-            self.pill.subtitleLabel.text = nil;
+            self.pill.subtitleLabel.text = error.localizedDescription;
             self.pill.progressRing.hidden = YES;
-            [self.pill dismissAfterDelay:2.0];
+            [self.pill dismissAfterDelay:3.0];
+        } else if (!error) {
+            // nil error without fileURL callback — dismiss stale pill
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if (self.pill.superview) [self.pill dismissAfterDelay:0];
+            });
         }
     });
 }
