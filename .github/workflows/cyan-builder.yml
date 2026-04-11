@@ -115,4 +115,4 @@ jobs:
           draft: true
           prerelease: false
           artifacts: ${{ steps.naming.outputs.ipa_name }}
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
