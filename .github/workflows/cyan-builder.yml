@@ -1,0 +1,118 @@
+name: Inject RyukGram into Instagram
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'Direct link to the decrypted Instagram IPA'
+        required: true
+
+jobs:
+  inject:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip python3-venv curl unzip zstd binutils
+
+      - name: Install pipx
+        run: |
+          python3 -m pip install --user pipx
+          python3 -m pipx ensurepath
+        env:
+          PIPX_HOME: ~/.local/pipx
+          PIPX_BIN_DIR: ~/.local/bin
+
+      - name: Add pipx to PATH
+        run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
+
+      - name: Install cyan
+        run: pipx install --force https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
+
+      - name: Fetch latest RyukGram release info
+        id: ryukgram
+        run: |
+          RELEASE_JSON=$(curl -s https://api.github.com/repos/faroukbmiled/RyukGram/releases/latest)
+
+          DYLIB_URL=$(echo "$RELEASE_JSON" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          for asset in data['assets']:
+              if asset['name'].endswith('.dylib'):
+                  print(asset['browser_download_url'])
+                  break
+          ")
+
+          RYUK_VERSION=$(echo "$RELEASE_JSON" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          print(data['tag_name'])
+          ")
+
+          echo "dylib_url=$DYLIB_URL" >> $GITHUB_OUTPUT
+          echo "ryuk_version=$RYUK_VERSION" >> $GITHUB_OUTPUT
+          echo "Fetched RyukGram $RYUK_VERSION — dylib: $DYLIB_URL"
+
+      - name: Download Instagram IPA
+        run: curl -L "${{ github.event.inputs.ipa_url }}" -o app.ipa
+
+      - name: Parse Instagram version from IPA
+        id: instagram
+        run: |
+          INSTA_VERSION=$(python3 -c "
+          import zipfile, plistlib, sys
+
+          with zipfile.ZipFile('app.ipa', 'r') as z:
+              plist_candidates = [
+                  name for name in z.namelist()
+                  if name.startswith('Payload/') and name.endswith('Info.plist')
+                  and name.count('/') == 2
+              ]
+
+              if not plist_candidates:
+                  print('ERROR: Info.plist not found', file=sys.stderr)
+                  sys.exit(1)
+
+              with z.open(plist_candidates[0]) as f:
+                  plist = plistlib.load(f)
+                  version = plist.get('CFBundleShortVersionString')
+                  if not version:
+                      print('ERROR: CFBundleShortVersionString missing', file=sys.stderr)
+                      sys.exit(1)
+                  print(version)
+          ")
+
+          echo "insta_version=v$INSTA_VERSION" >> $GITHUB_OUTPUT
+          echo "Instagram version: v$INSTA_VERSION"
+
+      - name: Download RyukGram dylib
+        run: curl -L "${{ steps.ryukgram.outputs.dylib_url }}" -o tweak.dylib
+
+      - name: Inject dylib into IPA
+        run: cyan -i app.ipa -f tweak.dylib -o output.ipa
+
+      - name: Rename output IPA
+        id: naming
+        run: |
+          IPA_NAME="RyukGram_${{ steps.instagram.outputs.insta_version }}_${{ steps.ryukgram.outputs.ryuk_version }}.ipa"
+          mv output.ipa "$IPA_NAME"
+          echo "ipa_name=$IPA_NAME" >> $GITHUB_OUTPUT
+          echo "Final IPA name: $IPA_NAME"
+
+      - name: Draft release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ryukgram-${{ steps.instagram.outputs.insta_version }}-${{ steps.ryukgram.outputs.ryuk_version }}-${{ github.run_number }}
+          name: Instagram ${{ steps.instagram.outputs.insta_version }}
+          body: |
+            **Instagram version:** ${{ steps.instagram.outputs.insta_version }}
+            **RyukGram version:** ${{ steps.ryukgram.outputs.ryuk_version }}
+          draft: true
+          prerelease: false
+          artifacts: ${{ steps.naming.outputs.ipa_name }}
+          token: ${{ secrets.GH_TOKEN }}
